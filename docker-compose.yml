@@ -1,0 +1,156 @@
+# ==============================================================
+# Docker Compose - Orquestração de Microsserviços
+# ==============================================================
+# Este arquivo define e orquestra todos os microsserviços da aplicação.
+#
+# Arquitetura:
+# - API Gateway (porta 8080) - Ponto de entrada único
+# - Task Service (porta 8081) - Gerenciamento de tarefas
+# - Statistics Service (porta 8082) - Agregação de estatísticas
+#
+# Comunicação:
+# - Requisições externas -> API Gateway (8080)
+# - Gateway roteia para Task Service (8081) e Statistics Service (8082)
+# - Statistics Service consome dados do Task Service via HTTP
+#
+# Rede:
+# - Todos os serviços na mesma rede Docker (task-manager-network)
+# - Comunicação interna via nomes de serviço (DNS automático)
+#
+# Para executar:
+#   docker-compose up -d          # Inicia todos os serviços em background
+#   docker-compose ps             # Lista status dos serviços
+#   docker-compose logs -f        # Acompanha logs em tempo real
+#   docker-compose down           # Para e remove todos os containers
+# ==============================================================
+
+version: '3.8'
+
+services:
+  # ==============================================================
+  # TASK SERVICE - Gerenciamento de Tarefas
+  # ==============================================================
+  task-service:
+    build:
+      context: ./services/task-service
+      dockerfile: Dockerfile
+    container_name: task-service
+    hostname: task-service
+    ports:
+      - "8081:8081"  # Expõe porta para acesso direto (opcional)
+    environment:
+      # Configurações do serviço
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8081
+      # Banco de dados H2 (em memória, isolado por serviço)
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:taskdb
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # JPA/Hibernate
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      - SPRING_JPA_SHOW_SQL=true
+      # Logging
+      - LOGGING_LEVEL_COM_EXAMPLE_TASKSERVICE=INFO
+    networks:
+      - task-manager-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "service=task-service"
+      - "version=1.0.0"
+
+  # ==============================================================
+  # STATISTICS SERVICE - Agregação de Estatísticas
+  # ==============================================================
+  statistics-service:
+    build:
+      context: ./services/statistics-service
+      dockerfile: Dockerfile
+    container_name: statistics-service
+    hostname: statistics-service
+    ports:
+      - "8082:8082"  # Expõe porta para acesso direto (opcional)
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8082
+      # URL do Task Service (comunicação entre serviços)
+      - TASK_SERVICE_URL=http://task-service:8081
+      # Logging
+      - LOGGING_LEVEL_COM_EXAMPLE_STATISTICSSERVICE=INFO
+    networks:
+      - task-manager-network
+    depends_on:
+      task-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "service=statistics-service"
+      - "version=1.0.0"
+
+  # ==============================================================
+  # API GATEWAY - Porta de Entrada Única
+  # ==============================================================
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    hostname: api-gateway
+    ports:
+      - "8080:8080"  # Porta principal de acesso (mesma do monólito)
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+      # Rotas para os microsserviços
+      - SPRING_CLOUD_GATEWAY_ROUTES_0_ID=task-service
+      - SPRING_CLOUD_GATEWAY_ROUTES_0_URI=http://task-service:8081
+      - SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0=Path=/api/tasks/**
+      - SPRING_CLOUD_GATEWAY_ROUTES_1_ID=statistics-service
+      - SPRING_CLOUD_GATEWAY_ROUTES_1_URI=http://statistics-service:8082
+      - SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0=Path=/api/statistics/**
+      # Logging
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_GATEWAY=INFO
+    networks:
+      - task-manager-network
+    depends_on:
+      task-service:
+        condition: service_healthy
+      statistics-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "service=api-gateway"
+      - "version=1.0.0"
+
+# ==============================================================
+# REDE
+# ==============================================================
+# Rede bridge para comunicação entre containers
+networks:
+  task-manager-network:
+    driver: bridge
+    name: task-manager-network
+
+# ==============================================================
+# VOLUMES (Opcional - para persistência futura)
+# ==============================================================
+# volumes:
+#   task-db-data:
+#   statistics-db-data:

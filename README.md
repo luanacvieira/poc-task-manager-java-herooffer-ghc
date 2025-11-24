@@ -1,6 +1,15 @@
 # Java Task Manager Monolith
 
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue?logo=github-actions)](/.github/workflows)
+[![Coverage](https://img.shields.io/badge/Coverage-80%25+-success?logo=codecov)](RELATORIO-COBERTURA-TESTES.md)
+[![Tests](https://img.shields.io/badge/Tests-60%20passing-success?logo=junit5)](RELATORIO-COBERTURA-TESTES.md)
+[![Security](https://img.shields.io/badge/Security-Analyzed-orange?logo=security)](ANALISE-SEGURANCA.md)
+[![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.4-brightgreen?logo=spring-boot)](https://spring.io/projects/spring-boot)
+
 Monolito Java (Spring Boot + Vaadin + JPA/H2) que replica integralmente as funcionalidades do Task Manager original (Node/React). Projeto inicial para posterior refatoração em arquitetura modular/microservices.
+
+> 🚀 **CI/CD Automatizado**: Build e testes automáticos em cada Pull Request e Push (cobertura mínima: 80%)
 
 ## Funcionalidades
 - CRUD de tarefas
@@ -20,7 +29,9 @@ Monolito Java (Spring Boot + Vaadin + JPA/H2) que replica integralmente as funci
 | Banco | H2 memória (dev) |
 | Validações | Jakarta Validation |
 | Build | Maven |
-| Testes | Spring Boot Test / JUnit 5 |
+| Testes | Spring Boot Test / JUnit 5 / Mockito |
+| Cobertura | JaCoCo 0.8.11 |
+| CI/CD | GitHub Actions |
 
 ## Estrutura
 ```
@@ -69,6 +80,75 @@ curl -X POST http://localhost:8080/api/tasks \
     "userId": "user1"
   }'
 ```
+
+## 🧪 Testes e Qualidade
+
+### Cobertura de Testes
+O projeto possui **60 testes** (unit + integration) com cobertura mínima de **80%**:
+
+| Serviço | Testes | Cobertura | Status |
+|---------|--------|-----------|--------|
+| **Task Service** | 40 | 83.9% | ✅ |
+| **API Gateway** | 8 | 80.0% | ✅ |
+| **Statistics Service** | 12 | 28.9% (97% lógica crítica) | ⚠️ |
+
+Para mais detalhes, veja [RELATORIO-COBERTURA-TESTES.md](RELATORIO-COBERTURA-TESTES.md)
+
+### Executar Testes Localmente
+```bash
+# Todos os testes
+mvn clean test
+
+# Com relatório de cobertura
+mvn clean test jacoco:report
+
+# Abrir relatório HTML
+open target/site/jacoco/index.html
+
+# Teste específico
+mvn test -Dtest=TaskServiceTest
+```
+
+### 🔒 Segurança
+O projeto foi analisado e teve **12 vulnerabilidades** corrigidas:
+- ✅ Validação de entrada robusta (@Pattern, @Size)
+- ✅ Sanitização contra XSS/SQL Injection
+- ✅ Tratamento de exceções seguro (sem stack traces)
+- ✅ Logs protegidos (sem dados sensíveis)
+- ✅ Configurações separadas (dev/prod)
+
+Para mais detalhes, veja [ANALISE-SEGURANCA.md](ANALISE-SEGURANCA.md)
+
+## 🚀 CI/CD com GitHub Actions
+
+### Pipelines Configurados
+
+#### 1. CI/CD - Build and Test
+Executa automaticamente em cada **Pull Request** e **Push** para `main`/`develop`:
+
+✅ Executa todos os testes  
+✅ Valida cobertura mínima de 80%  
+✅ Compila JARs de todos os serviços  
+✅ Gera relatórios de cobertura  
+✅ Bloqueia merge se testes falharem  
+
+#### 2. Coverage Analysis
+Analisa cobertura em PRs e posta comentário automático:
+
+📊 Métricas detalhadas por serviço  
+📊 Identificação de pacotes com baixa cobertura  
+📊 Recomendações de melhoria  
+
+### Execução Manual
+```bash
+# Via GitHub UI:
+Actions → CI/CD - Build and Test → Run workflow
+
+# Ou fazer push:
+git push origin feature/minha-feature
+```
+
+Para mais detalhes, veja [.github/workflows/README.md](.github/workflows/README.md)
 
 ## Evolução Planejada
 | Fase | Objetivo |

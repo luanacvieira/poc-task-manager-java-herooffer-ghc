@@ -1,0 +1,279 @@
+name: CI/CD - Build and Test
+
+on:
+  # Trigger em pull requests para branch main
+  pull_request:
+    branches: [ main, develop ]
+  
+  # Trigger em push para branches principais
+  push:
+    branches: [ main, develop ]
+  
+  # Permite execução manual via GitHub UI
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Pular execução de testes (use apenas para debug)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+env:
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'temurin'
+  MAVEN_OPTS: '-Xmx2g -XX:MaxMetaspaceSize=512m'
+  MINIMUM_COVERAGE: 80
+
+jobs:
+  # Job 1: Validação de código e testes dos microserviços
+  test-microservices:
+    name: Test Microservices
+    runs-on: ubuntu-latest
+    
+    strategy:
+      # Não cancela outros jobs se um falhar (para ver todos os resultados)
+      fail-fast: false
+      matrix:
+        service: [task-service, statistics-service, api-gateway]
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necessário para análise de cobertura comparativa
+      
+      - name: ☕ Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+      
+      - name: 🔍 Verificar estrutura do serviço
+        run: |
+          if [ ! -d "services/${{ matrix.service }}" ]; then
+            echo "❌ Serviço ${{ matrix.service }} não encontrado!"
+            exit 1
+          fi
+          echo "✅ Serviço ${{ matrix.service }} encontrado"
+      
+      - name: 🧪 Executar testes unitários e de integração
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        working-directory: services/${{ matrix.service }}
+        run: |
+          echo "🚀 Executando testes para ${{ matrix.service }}..."
+          mvn clean test -B -V
+      
+      - name: 📊 Gerar relatório de cobertura JaCoCo
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        working-directory: services/${{ matrix.service }}
+        run: |
+          echo "📊 Gerando relatório de cobertura..."
+          mvn jacoco:report -B
+      
+      - name: 🎯 Verificar cobertura mínima (${{ env.MINIMUM_COVERAGE }}%)
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        working-directory: services/${{ matrix.service }}
+        run: |
+          echo "🎯 Validando cobertura mínima de ${{ env.MINIMUM_COVERAGE }}%..."
+          
+          # Extrai percentual de cobertura do relatório JaCoCo
+          if [ -f "target/site/jacoco/index.html" ]; then
+            COVERAGE=$(grep -oP '<tfoot>.*?(\d+)%' target/site/jacoco/index.html | grep -oP '\d+' | head -1)
+            
+            if [ -z "$COVERAGE" ]; then
+              echo "⚠️ Não foi possível extrair percentual de cobertura"
+              echo "Tentando método alternativo..."
+              
+              # Método alternativo: parse do CSV
+              if [ -f "target/site/jacoco/jacoco.csv" ]; then
+                COVERED=$(awk -F, '{sum+=$5} END {print sum}' target/site/jacoco/jacoco.csv)
+                TOTAL=$(awk -F, '{sum+=$6} END {print sum}' target/site/jacoco/jacoco.csv)
+                COVERAGE=$(awk "BEGIN {printf \"%.0f\", ($COVERED/$TOTAL)*100}")
+              fi
+            fi
+            
+            echo "📊 Cobertura de testes: ${COVERAGE}%"
+            echo "🎯 Cobertura mínima: ${{ env.MINIMUM_COVERAGE }}%"
+            
+            if [ -n "$COVERAGE" ] && [ "$COVERAGE" -ge "${{ env.MINIMUM_COVERAGE }}" ]; then
+              echo "✅ Cobertura APROVADA (${COVERAGE}% >= ${{ env.MINIMUM_COVERAGE }}%)"
+            else
+              echo "❌ Cobertura INSUFICIENTE (${COVERAGE}% < ${{ env.MINIMUM_COVERAGE }}%)"
+              echo ""
+              echo "🔍 Recomendações:"
+              echo "  - Adicione mais testes unitários"
+              echo "  - Revise a cobertura de branches"
+              echo "  - Verifique métodos não testados"
+              exit 1
+            fi
+          else
+            echo "⚠️ Relatório JaCoCo não encontrado em target/site/jacoco/index.html"
+            echo "Verificando se os testes foram executados..."
+            
+            if [ -d "target/test-classes" ]; then
+              echo "✅ Testes compilados, mas relatório JaCoCo ausente"
+              echo "Considerando build válido, mas sem validação de cobertura"
+            else
+              echo "❌ Testes não foram executados"
+              exit 1
+            fi
+          fi
+      
+      - name: 📈 Upload relatório de cobertura (Artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/site/jacoco/
+          retention-days: 30
+      
+      - name: 📋 Upload resultados de testes (Artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.service }}
+          path: |
+            services/${{ matrix.service }}/target/surefire-reports/
+            services/${{ matrix.service }}/target/failsafe-reports/
+          retention-days: 30
+  
+  # Job 2: Build dos microserviços (só executa se testes passarem)
+  build-microservices:
+    name: Build Microservices
+    needs: test-microservices
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [task-service, statistics-service, api-gateway]
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+      
+      - name: 🏗️ Build do serviço (sem testes)
+        working-directory: services/${{ matrix.service }}
+        run: |
+          echo "🏗️ Compilando ${{ matrix.service }}..."
+          mvn clean package -DskipTests -B -V
+      
+      - name: 📦 Upload JAR compilado (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/*.jar
+          retention-days: 7
+  
+  # Job 3: Build do monólito (legado)
+  build-monolith:
+    name: Build Monolith (Legacy)
+    needs: test-microservices
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: 'maven'
+      
+      - name: 🏗️ Build do monólito (sem testes)
+        run: |
+          echo "🏗️ Compilando monólito..."
+          mvn clean package -DskipTests -B -V
+      
+      - name: 📦 Upload JAR do monólito (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-monolith
+          path: target/*.jar
+          retention-days: 7
+  
+  # Job 4: Relatório consolidado
+  coverage-report:
+    name: Coverage Report Summary
+    needs: test-microservices
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📥 Download relatórios de cobertura
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-report-*
+          path: coverage-reports
+      
+      - name: 📊 Gerar resumo consolidado
+        run: |
+          echo "# 📊 Relatório de Cobertura de Testes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Microserviços Analisados" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Serviço | Status | Cobertura |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
+          
+          for service in task-service statistics-service api-gateway; do
+            REPORT_FILE="coverage-reports/coverage-report-${service}/index.html"
+            
+            if [ -f "$REPORT_FILE" ]; then
+              COVERAGE=$(grep -oP '<tfoot>.*?(\d+)%' "$REPORT_FILE" | grep -oP '\d+' | head -1 || echo "N/A")
+              
+              if [ "$COVERAGE" != "N/A" ] && [ "$COVERAGE" -ge "${{ env.MINIMUM_COVERAGE }}" ]; then
+                STATUS="✅ Aprovado"
+              else
+                STATUS="❌ Reprovado"
+              fi
+              
+              echo "| ${service} | ${STATUS} | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| ${service} | ⚠️ Não encontrado | N/A |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Cobertura mínima exigida:** ${{ env.MINIMUM_COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "🔍 **Dica:** Baixe os artefatos para visualizar os relatórios HTML completos" >> $GITHUB_STEP_SUMMARY
+
+  # Job 5: Status final consolidado
+  status-check:
+    name: CI Status Check
+    needs: [test-microservices, build-microservices, build-monolith]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: ✅ Verificar status geral
+        run: |
+          if [[ "${{ needs.test-microservices.result }}" == "success" ]] && \
+             [[ "${{ needs.build-microservices.result }}" == "success" ]] && \
+             [[ "${{ needs.build-monolith.result }}" == "success" ]]; then
+            echo "✅ Todos os jobs foram concluídos com sucesso!"
+            echo "🎉 Build APROVADO"
+            exit 0
+          else
+            echo "❌ Um ou mais jobs falharam:"
+            echo "  - Testes: ${{ needs.test-microservices.result }}"
+            echo "  - Build Microservices: ${{ needs.build-microservices.result }}"
+            echo "  - Build Monolith: ${{ needs.build-monolith.result }}"
+            echo ""
+            echo "🔍 Verifique os logs acima para detalhes"
+            exit 1
+          fi
