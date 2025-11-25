@@ -1,84 +1,201 @@
-# Java Task Manager Monolith
+# 🚀 Task Manager - Arquitetura de Microsserviços
 
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-blue?logo=github-actions)](/.github/workflows)
 [![Coverage](https://img.shields.io/badge/Coverage-80%25+-success?logo=codecov)](RELATORIO-COBERTURA-TESTES.md)
 [![Tests](https://img.shields.io/badge/Tests-60%20passing-success?logo=junit5)](RELATORIO-COBERTURA-TESTES.md)
 [![Security](https://img.shields.io/badge/Security-Analyzed-orange?logo=security)](ANALISE-SEGURANCA.md)
 [![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.4-brightgreen?logo=spring-boot)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.2-brightgreen?logo=spring-boot)](https://spring.io/projects/spring-boot)
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)](https://docs.docker.com/compose/)
+[![Architecture](https://img.shields.io/badge/Architecture-Microservices-purple)](ARQUITETURA-TECNICA.md)
 
-Monolito Java (Spring Boot + Vaadin + JPA/H2) que replica integralmente as funcionalidades do Task Manager original (Node/React). Projeto inicial para posterior refatoração em arquitetura modular/microservices.
+Aplicação moderna de gerenciamento de tarefas construída com **arquitetura de microsserviços**, Spring Boot e interface web Vaadin. O projeto evoluiu de um monólito para microsserviços independentes e escaláveis.
 
-> 🚀 **CI/CD Automatizado**: Build e testes automáticos em cada Pull Request e Push (cobertura mínima: 80%)
+> 🎯 **Migração Completa**: De monólito para microsserviços concluída com sucesso! Veja o [relatório de migração](MIGRATION-REPORT.md)
 
-## Funcionalidades
-- CRUD de tarefas
-- Campos: título, descrição, prioridade (LOW/MEDIUM/HIGH/URGENT), categoria (WORK/PERSONAL/STUDY/HEALTH/OTHER), dueDate (LocalDate), tags (Set<String>), assignedTo, userId, completed, createdAt/updatedAt
-- Estatísticas agregadas (total, pendentes, concluídas, urgentes)
-- UI 100% Java com Vaadin (formulário + grid + edição inline)
-- API REST /api/tasks espelhando versão anterior
-- Persistência JPA/Hibernate (H2 memória)
-- Teste de serviço básico
+## 📋 Visão Geral
 
-## Stack
+### Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Cliente (Navegador Web)                      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                ┌────────────┴────────────┐
+                │                         │
+         ┌──────▼──────┐          ┌──────▼──────┐
+         │   Frontend  │          │ API Gateway │
+         │   Vaadin    │          │   :8080     │
+         │   :8090     │          └──────┬──────┘
+         └─────────────┘                 │
+                                   ┌─────┴──────┐
+                                   │            │
+                            ┌──────▼─────┐  ┌──▼─────────┐
+                            │    Task    │  │ Statistics │
+                            │  Service   │  │  Service   │
+                            │   :8081    │  │   :8082    │
+                            └────────────┘  └────────────┘
+```
+
+### Funcionalidades
+
+- ✅ **CRUD Completo de Tarefas** - Criar, listar, atualizar e deletar
+- ✅ **Campos Avançados** - Título, descrição, prioridade, categoria, data de vencimento, tags, responsável
+- ✅ **Estatísticas em Tempo Real** - Totais, pendentes, concluídas, distribuições
+- ✅ **Interface Moderna** - Cards visuais, filtros, badges coloridos, design responsivo
+- ✅ **API RESTful** - Endpoints completos para integração
+- ✅ **Microsserviços** - Arquitetura escalável e desacoplada
+- ✅ **Docker Ready** - Containerização completa com Docker Compose
+
+## 🏗️ Componentes
+
+### Microsserviços
+
+| Serviço | Porta | Descrição |
+|---------|-------|-----------|
+| **API Gateway** | 8080 | Ponto de entrada único, roteamento de requisições |
+| **Task Service** | 8081 | Gerenciamento completo do ciclo de vida das tarefas |
+| **Statistics Service** | 8082 | Agregação e cálculo de estatísticas |
+| **Frontend Vaadin** | 8090 | Interface web moderna em Java |
+
+### Stack Tecnológica
+
 | Camada | Tecnologia |
 |--------|-----------|
-| Web UI | Vaadin 24 |
-| API REST | Spring Boot Web |
-| Persistência | Spring Data JPA / Hibernate |
-| Banco | H2 memória (dev) |
-| Validações | Jakarta Validation |
-| Build | Maven |
-| Testes | Spring Boot Test / JUnit 5 / Mockito |
-| Cobertura | JaCoCo 0.8.11 |
-| CI/CD | GitHub Actions |
+| **API Gateway** | Spring Cloud Gateway 4.1.1 |
+| **Backend** | Spring Boot 3.2.2, Spring Data JPA |
+| **Frontend** | Vaadin 24.3.5 (100% Java) |
+| **Persistência** | Hibernate, H2 Database (in-memory) |
+| **Validação** | Jakarta Validation |
+| **Containerização** | Docker, Docker Compose |
+| **Build** | Maven 3.9+, Maven Wrapper |
+| **Testes** | Spring Boot Test, JUnit 5, Mockito |
+| **Cobertura** | JaCoCo 0.8.11 |
+| **CI/CD** | GitHub Actions |
 
-## Estrutura
-```
-java-task-manager-monolith/
-  pom.xml
-  src/main/java/com/example/taskmanager/
-    TaskManagerApplication.java
-    domain/ (Task, Priority, Category)
-    repository/ (TaskRepository)
-    service/ (TaskService)
-    web/rest/ (TaskController, DTO/Mapper)
-    web/ui/ (MainLayout, TaskView)
-  src/main/resources/application.properties
-  src/test/java/com/example/taskmanager/TaskServiceTests.java
-```
+## 🚀 Início Rápido
 
-## Execução
-Pré-requisitos: JDK 17+
+### Pré-requisitos
+
+- Java 17+
+- Docker e Docker Compose
+- Maven 3.9+ (opcional, wrapper incluído)
+
+### Executar com Docker Compose (Recomendado)
+
 ```bash
-mvn spring-boot:run
+# 1. Clonar o repositório
+git clone https://github.com/vizagre/poc-task-manager-java-herooffer-ghc.git
+cd poc-task-manager-java-herooffer-ghc
+
+# 2. Iniciar todos os microsserviços
+docker-compose up -d
+
+# 3. Verificar status
+docker-compose ps
+
+# 4. Acessar a aplicação
+# Frontend: http://localhost:8090/tasks
+# API Gateway: http://localhost:8080
 ```
-Aplicação inicia:
-- UI Vaadin: http://localhost:8080/tasks
-- API REST: http://localhost:8080/api/tasks
-- H2 Console: http://localhost:8080/h2-console (jdbc:h2:mem:taskdb)
 
-## Endpoints
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | /api/tasks | Lista todas as tarefas |
-| POST | /api/tasks | Cria nova tarefa |
-| PUT | /api/tasks/{id} | Atualiza parcialmente |
-| DELETE | /api/tasks/{id} | Remove tarefa |
-| GET | /api/tasks/stats | Estatísticas agregadas |
+### Script de Execução Automatizado
 
-## Exemplo cURL
 ```bash
+# Build e start de todos os serviços
+./run-microservices.sh
+
+# Ou apenas build
+./build-all.sh
+```
+
+### Executar Localmente (Desenvolvimento)
+
+```bash
+# Microsserviços via Docker
+docker-compose up -d
+
+# Compilar e iniciar frontend
+export JAVA_HOME=/caminho/para/jdk-17
+./mvnw clean package -DskipTests
+./mvnw spring-boot:run
+```
+
+## 📚 Documentação
+
+- **[Arquitetura Técnica](ARQUITETURA-TECNICA.md)** - Documentação completa da arquitetura, diagramas, endpoints
+- **[Relatório de Migração](MIGRATION-REPORT.md)** - Detalhes da transformação monólito → microsserviços
+- **[Análise de Segurança](ANALISE-SEGURANCA.md)** - Validações e práticas de segurança implementadas
+- **[Cobertura de Testes](RELATORIO-COBERTURA-TESTES.md)** - Relatório de testes e cobertura de código
+- **[GitHub Actions](GITHUB-ACTIONS-IMPLEMENTACAO.md)** - CI/CD e automação
+
+## 🔌 API Endpoints
+
+### Task Service (via API Gateway :8080)
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/tasks` | Listar todas as tarefas |
+| GET | `/api/tasks/{id}` | Buscar tarefa por ID |
+| GET | `/api/tasks/user/{userId}` | Buscar tarefas por usuário |
+| POST | `/api/tasks` | Criar nova tarefa |
+| PUT | `/api/tasks/{id}` | Atualizar tarefa |
+| DELETE | `/api/tasks/{id}` | Excluir tarefa |
+
+### Statistics Service (via API Gateway :8080)
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/statistics` | Obter estatísticas gerais |
+
+Veja a [documentação completa de API](ARQUITETURA-TECNICA.md#endpoints-da-api) para detalhes de request/response.
+
+## 🏗️ Estrutura do Projeto
+
+```
+poc-task-manager-java-herooffer-ghc/
+├── services/                          # Microsserviços
+│   ├── api-gateway/                   # Spring Cloud Gateway (porta 8080)
+│   ├── task-service/                  # Gerenciamento de tarefas (porta 8081)
+│   └── statistics-service/            # Agregação de estatísticas (porta 8082)
+├── src/                               # Frontend Vaadin (porta 8090)
+│   ├── main/java/.../
+│   │   ├── domain/                    # Entidades (Task, Priority, Category)
+│   │   ├── repository/                # Spring Data JPA
+│   │   ├── service/                   # Lógica de negócio
+│   │   └── web/
+│   │       ├── rest/                  # API REST controllers
+│   │       └── ui/                    # Interface Vaadin
+│   └── test/
+├── docker-compose.yml                 # Orquestração de containers
+├── build-all.sh                       # Script de build
+├── run-microservices.sh               # Script de execução
+└── pom.xml                            # Maven POM
+```
+
+## 💡 Exemplo de Uso da API
+
+```bash
+# Criar nova tarefa
 curl -X POST http://localhost:8080/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Revisar arquitetura",
+    "title": "Implementar autenticação JWT",
+    "description": "Adicionar autenticação aos microsserviços",
     "priority": "HIGH",
     "category": "WORK",
-    "dueDate": "2025-11-13",
-    "tags": ["planejamento","arquitetura"],
-    "userId": "user1"
+    "userId": "user1",
+    "dueDate": "2025-12-15",
+    "assignedTo": "João Silva",
+    "tags": ["seguranca", "backend", "jwt"]
   }'
+
+# Listar todas as tarefas
+curl http://localhost:8080/api/tasks
+
+# Obter estatísticas
+curl http://localhost:8080/api/statistics
 ```
 
 ## 🧪 Testes e Qualidade
@@ -148,39 +265,105 @@ Actions → CI/CD - Build and Test → Run workflow
 git push origin feature/minha-feature
 ```
 
-Para mais detalhes, veja [.github/workflows/README.md](.github/workflows/README.md)
+Para mais detalhes, veja [GITHUB-ACTIONS-IMPLEMENTACAO.md](GITHUB-ACTIONS-IMPLEMENTACAO.md) e [.github/workflows/README.md](.github/workflows/README.md)
 
-## Evolução Planejada
-| Fase | Objetivo |
-|------|----------|
-| 1 | Monolito funcional (atual) |
-| 2 | Introduzir camadas modulares (separar domínio, aplicação, infraestrutura) |
-| 3 | Extrair API REST para módulo próprio |
-| 4 | Migrar UI para frontend separado (React ou Vaadin separado) |
-| 5 | Persistência externa (PostgreSQL/Mongo) + migração de dueDate conforme necessidade |
-| 6 | Autenticação/JWT multiusuário |
-| 7 | Observabilidade (logs estruturados, métricas, tracing) |
+## 🛠️ Comandos Úteis
 
-## Refatorações Futuras (Sugestões)
-- Substituir `TaskService` por CQRS (Commands/Queries) moduláveis
-- Introduzir DTO específico para criação/atualização (CreateTaskRequest / UpdateTaskRequest)
-- Eventos de domínio (TaskCreated, TaskCompleted)
-- Filtragem e paginação avançada (Specification API / QueryDSL)
-- Testes de integração com Testcontainers (PostgreSQL/Mongo)
+### Docker
 
-## Como Criar Novo Repositório (Git)
-Dentro do diretório `java-task-manager-monolith`:
 ```bash
-git init
-git add .
-git commit -m "feat: inicial monolito java task manager"
-git branch -M main
-git remote add origin https://github.com/<seu-user>/<novo-repo>.git
-git push -u origin main
+# Iniciar serviços
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Ver logs de um serviço específico
+docker-compose logs -f task-service
+
+# Parar serviços
+docker-compose down
+
+# Rebuild completo
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# Ver status dos containers
+docker-compose ps
 ```
 
-## Licença
-ISC (ajuste conforme necessidade corporativa).
+### Maven
+
+```bash
+# Compilar todos os módulos
+./mvnw clean install
+
+# Executar testes
+./mvnw test
+
+# Gerar relatório de cobertura
+./mvnw test jacoco:report
+
+# Build sem testes
+./mvnw clean package -DskipTests
+
+# Executar aplicação
+./mvnw spring-boot:run
+```
+
+## 🚧 Próximos Passos
+
+### Melhorias Planejadas
+
+- [ ] **Autenticação e Autorização** - Implementar JWT e Spring Security
+- [ ] **Banco de Dados Persistente** - Migrar de H2 para PostgreSQL
+- [ ] **Service Discovery** - Adicionar Eureka ou Consul
+- [ ] **Circuit Breaker** - Implementar Resilience4j
+- [ ] **API Documentation** - Adicionar Swagger/OpenAPI
+- [ ] **Observabilidade** - Prometheus, Grafana, Zipkin
+- [ ] **Mensageria** - Implementar eventos assíncronos com RabbitMQ/Kafka
+- [ ] **Cache** - Adicionar Redis para performance
+
+### Arquitetura Futura
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Load Balancer                      │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │ API Gateway │
+                    │   + Auth    │
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+         ┌────▼────┐  ┌───▼────┐  ┌───▼─────┐
+         │  Task   │  │ Stats  │  │  User   │
+         │ Service │  │Service │  │ Service │
+         └────┬────┘  └───┬────┘  └────┬────┘
+              │           │            │
+         ┌────▼────┐      │       ┌────▼────┐
+         │PostgreSQL│     │       │PostgreSQL│
+         └─────────┘      │       └─────────┘
+                          │
+                     ┌────▼────┐
+                     │ Message │
+                     │  Queue  │
+                     └─────────┘
+```
+
+## 📞 Contato e Contribuição
+
+- **Repositório:** https://github.com/vizagre/poc-task-manager-java-herooffer-ghc
+- **Issues:** Use o GitHub Issues para reportar bugs
+- **Pull Requests:** Contribuições são bem-vindas!
+
+## 📄 Licença
+
+Este projeto está licenciado sob a licença ISC.
 
 ---
-Documentação inicial concluída. Pronto para evoluir com desacoplamento guiado.
+
+**Desenvolvido com** ☕ **e** 💙 **usando Spring Boot e Vaadin**
