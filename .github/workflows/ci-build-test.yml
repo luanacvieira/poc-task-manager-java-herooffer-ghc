@@ -3,7 +3,7 @@ name: CI/CD - Build and Test
 on:
   # Trigger em pull requests para branch main
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature/* ]
   
   # Trigger em push para branches principais
   push:
