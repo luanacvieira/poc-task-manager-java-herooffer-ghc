@@ -1,0 +1,174 @@
+name: Code Coverage Analysis
+
+on:
+  pull_request:
+    branches: [ main, develop, feature/* ]
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '17'
+  MINIMUM_COVERAGE: 80
+
+jobs:
+  analyze-coverage:
+    name: Detailed Coverage Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: 🧪 Executar testes em todos os microserviços
+        run: |
+          echo "📊 Executando testes com análise de cobertura..."
+          
+          for service in services/*/; do
+            SERVICE_NAME=$(basename "$service")
+            echo ""
+            echo "▶️ Processando: $SERVICE_NAME"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
+            cd "$service"
+            mvn clean test jacoco:report -B -q || echo "⚠️ Falha em $SERVICE_NAME"
+            cd ../..
+          done
+      
+      - name: 📊 Análise detalhada de cobertura
+        run: |
+          echo "# 📊 Análise Detalhada de Cobertura" > coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "**Data:** $(date '+%Y-%m-%d %H:%M:%S')" >> coverage-summary.md
+          echo "**Branch:** ${{ github.ref_name }}" >> coverage-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          
+          TOTAL_SERVICES=0
+          APPROVED_SERVICES=0
+          
+          echo "## 📈 Resultados por Microserviço" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          
+          for service in services/*/; do
+            SERVICE_NAME=$(basename "$service")
+            JACOCO_REPORT="$service/target/site/jacoco/index.html"
+            
+            TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
+            
+            if [ -f "$JACOCO_REPORT" ]; then
+              # Extrai métricas do relatório HTML
+              INSTRUCTIONS=$(grep -A1 "Total" "$JACOCO_REPORT" | grep -oP '\d+ of [\d,]+' | head -1 || echo "N/A")
+              BRANCHES=$(grep -A1 "Total" "$JACOCO_REPORT" | grep -oP '\d+ of \d+' | sed -n '2p' || echo "N/A")
+              
+              # Calcula percentual
+              if [ "$INSTRUCTIONS" != "N/A" ]; then
+                MISSED=$(echo "$INSTRUCTIONS" | cut -d' ' -f1)
+                TOTAL=$(echo "$INSTRUCTIONS" | cut -d' ' -f3 | tr -d ',')
+                COVERED=$((TOTAL - MISSED))
+                PERCENTAGE=$(awk "BEGIN {printf \"%.1f\", ($COVERED/$TOTAL)*100}")
+              else
+                PERCENTAGE="N/A"
+              fi
+              
+              echo "### 🔹 $SERVICE_NAME" >> coverage-summary.md
+              echo "" >> coverage-summary.md
+              echo "| Métrica | Valor |" >> coverage-summary.md
+              echo "|---------|-------|" >> coverage-summary.md
+              echo "| **Cobertura** | ${PERCENTAGE}% |" >> coverage-summary.md
+              echo "| **Instruções** | $INSTRUCTIONS |" >> coverage-summary.md
+              echo "| **Branches** | $BRANCHES |" >> coverage-summary.md
+              
+              # Verifica aprovação
+              if [ "$PERCENTAGE" != "N/A" ]; then
+                PERCENT_INT=${PERCENTAGE%.*}
+                if [ "$PERCENT_INT" -ge "${{ env.MINIMUM_COVERAGE }}" ]; then
+                  echo "| **Status** | ✅ Aprovado |" >> coverage-summary.md
+                  APPROVED_SERVICES=$((APPROVED_SERVICES + 1))
+                else
+                  echo "| **Status** | ❌ Reprovado (< ${{ env.MINIMUM_COVERAGE }}%) |" >> coverage-summary.md
+                fi
+              else
+                echo "| **Status** | ⚠️ Sem dados |" >> coverage-summary.md
+              fi
+              
+              echo "" >> coverage-summary.md
+              
+              # Lista pacotes com baixa cobertura
+              if [ -f "$service/target/site/jacoco/index.html" ]; then
+                LOW_COV=$(grep -oP 'class="bar".*?(\d+)%' "$service/target/site/jacoco/index.html" | grep -oP '\d+%' | awk -F'%' '$1 < 70 {print $0}' | head -5)
+                
+                if [ -n "$LOW_COV" ]; then
+                  echo "⚠️ **Pacotes com cobertura < 70%:**" >> coverage-summary.md
+                  echo "\`\`\`" >> coverage-summary.md
+                  echo "$LOW_COV" >> coverage-summary.md
+                  echo "\`\`\`" >> coverage-summary.md
+                  echo "" >> coverage-summary.md
+                fi
+              fi
+              
+            else
+              echo "### 🔹 $SERVICE_NAME" >> coverage-summary.md
+              echo "" >> coverage-summary.md
+              echo "⚠️ Relatório JaCoCo não encontrado" >> coverage-summary.md
+              echo "" >> coverage-summary.md
+            fi
+          done
+          
+          echo "---" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "## 📊 Resumo Geral" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "- **Total de Serviços:** $TOTAL_SERVICES" >> coverage-summary.md
+          echo "- **Aprovados (≥ ${{ env.MINIMUM_COVERAGE }}%):** $APPROVED_SERVICES" >> coverage-summary.md
+          echo "- **Reprovados:** $((TOTAL_SERVICES - APPROVED_SERVICES))" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          
+          SUCCESS_RATE=$(awk "BEGIN {printf \"%.1f\", ($APPROVED_SERVICES/$TOTAL_SERVICES)*100}")
+          echo "- **Taxa de Sucesso:** ${SUCCESS_RATE}%" >> coverage-summary.md
+          echo "" >> coverage-summary.md
+          
+          if [ "$APPROVED_SERVICES" -eq "$TOTAL_SERVICES" ]; then
+            echo "✅ **Resultado:** TODOS OS SERVIÇOS APROVADOS" >> coverage-summary.md
+          else
+            echo "❌ **Resultado:** ALGUNS SERVIÇOS NÃO ATINGIRAM A META" >> coverage-summary.md
+          fi
+          
+          # Adiciona ao summary do GitHub
+          cat coverage-summary.md >> $GITHUB_STEP_SUMMARY
+          
+          # Falha se nem todos passaram
+          if [ "$APPROVED_SERVICES" -ne "$TOTAL_SERVICES" ]; then
+            echo ""
+            echo "❌ Cobertura insuficiente em alguns serviços"
+            exit 1
+          fi
+      
+      - name: 📤 Upload resumo de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage-summary.md
+      
+      - name: 💬 Comentar no PR (se for PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('coverage-summary.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
